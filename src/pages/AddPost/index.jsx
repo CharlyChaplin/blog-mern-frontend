@@ -5,14 +5,17 @@ import Button from '@mui/material/Button';
 import SimpleMDE from 'react-simplemde-editor';
 
 import 'easymde/dist/easymde.min.css';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import styles from './AddPost.module.scss';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { selectIsAuth } from '../../redux/slices/auth';
-import axios from '../../axios';
+import axios, { baseURL } from '../../axios';
+import { useEffect } from 'react';
+import { editPost } from '../../redux/slices/posts';
 
 
 export const AddPost = () => {
+	const location = useLocation();
 	const navigate = useNavigate();
 	const [imageUrl, setImageUrl] = useState();
 	const [isLoading, setIsLoading] = useState(false);
@@ -20,6 +23,27 @@ export const AddPost = () => {
 	const [text, setText] = useState('');
 	const [title, setTitle] = useState('');
 	const [tags, setTags] = useState('');
+	const { id } = useParams();
+	const [editPostContent, setEditPostContent] = useState('');
+	const dispatch = useDispatch();
+
+	const isEditable = Boolean(location.pathname === `/posts/${id}/edit`);
+
+	useEffect(() => {
+		if (id) {
+			setIsLoading(true);
+			axios.get(`/posts/${id}`)
+				.then(({ data }) => {
+					setEditPostContent(data); setIsLoading(false);
+					setImageUrl(data.imageUrl);
+					setTitle(data.title);
+					setTags(data.tags?.join(', '));
+					setText(data.text);
+				})
+				.catch(err => { console.log(err.message); setIsLoading(false) });
+		}
+	}, [])
+
 
 	const inputFileRef = useRef(null);
 
@@ -51,21 +75,23 @@ export const AddPost = () => {
 			const fields = {
 				title,
 				imageUrl,
-				tags: tags.split(','),
+				tags,
 				text,
 			};
-			
-			const { data } = await axios.post('/posts', fields);
-			
-			const id = data._id;
-			
+
+			location.pathname === `/posts/${id}/edit`
+				? await axios.patch(`/posts/${id}`, fields)
+				: await axios.post(`/post`, fields);
+
 			setIsLoading(false);
 			navigate(`/posts/${id}`);
-			
+
 		} catch (err) {
 			setIsLoading(false);
-			console.warn('Fault to create post');
-			alert('Fault to create post');
+			location.pathname === `/posts/${id}/edit`
+				? alert('Fault to edit post')
+				: alert('Fault to create post');
+
 		}
 	}
 
@@ -97,7 +123,7 @@ export const AddPost = () => {
 					<Button variant="contained" color="error" onClick={onClickRemoveImage}>
 						Удалить
 					</Button>
-					<img className={styles.image} src={`http://localhost:4444${imageUrl}`} alt="Uploaded" />
+					<img className={styles.image} src={`${baseURL}${imageUrl}`} alt="Uploaded" />
 				</>
 			)}
 			<br />
@@ -126,11 +152,13 @@ export const AddPost = () => {
 			/>
 			<div className={styles.buttons}>
 				<Button size="large" variant="contained" onClick={onSubmit}>
-					Опубликовать
+					{
+						isEditable ? 'Publish' : 'Save'
+					}
 				</Button>
-				<a href="/">
-					<Button size="large">Отмена</Button>
-				</a>
+				<NavLink to={'/'}>
+					<Button size="large">Cancel</Button>
+				</NavLink>
 			</div>
 		</Paper>
 	);
